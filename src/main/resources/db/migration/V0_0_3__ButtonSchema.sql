@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS buttons_table(
+    id SERIAL PRIMARY KEY,
+    text VARCHAR(255) NOT NULL,
+    link VARCHAR(255) NOT NULL
+);

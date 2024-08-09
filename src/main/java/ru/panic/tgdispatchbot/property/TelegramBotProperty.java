@@ -11,4 +11,5 @@ import org.springframework.context.annotation.Configuration;
 @Setter
 public class TelegramBotProperty {
     private String token;
+    private Long admin;
 }

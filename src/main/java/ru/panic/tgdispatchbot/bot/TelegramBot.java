@@ -6,14 +6,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
+import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
+import org.telegram.telegrambots.meta.api.methods.send.SendAnimation;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
-import org.telegram.telegrambots.meta.api.objects.Message;
-import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.*;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault;
+import org.telegram.telegrambots.meta.api.objects.games.Animation;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -22,12 +26,14 @@ import ru.panic.tgdispatchbot.model.Admin;
 import ru.panic.tgdispatchbot.model.Button;
 import ru.panic.tgdispatchbot.model.Group;
 import ru.panic.tgdispatchbot.pojo.AddButtonStep;
-import ru.panic.tgdispatchbot.pojo.Pair;
 import ru.panic.tgdispatchbot.property.TelegramBotProperty;
 import ru.panic.tgdispatchbot.service.AdminService;
 import ru.panic.tgdispatchbot.service.ButtonService;
 import ru.panic.tgdispatchbot.service.GroupService;
+import ru.panic.tgdispatchbot.util.URLFileDownloaderUtil;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 @Component
@@ -51,9 +57,11 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final AdminService adminService;
     private final GroupService groupService;
     private final ButtonService buttonService;
+    private final URLFileDownloaderUtil urlFileDownloaderUtil;
 
     private final Map<Long, Integer> addAdminSteps = new HashMap<>();
     private final Map<Long, Integer> deleteAdminSteps = new HashMap<>();
+    private final Map<Long, Integer> writeAnnouncementSteps = new HashMap<>();
     private final Map<Long, Integer> addGroupSteps = new HashMap<>();
     private final Map<Long, Integer> deleteGroupSteps = new HashMap<>();
     private final Map<Long, AddButtonStep> addButtonSteps = new HashMap<>();
@@ -76,6 +84,10 @@ public class TelegramBot extends TelegramLongPollingBot {
                 long telegramUserId = update.getMessage().getFrom().getId();
                 long chatId = update.getMessage().getChatId();
                 int messageId = update.getMessage().getMessageId();
+
+                if (chatId != telegramUserId) {
+                    return;
+                }
 
                 Optional<Admin> currentAdmin = adminService.getByTelegramUserId(telegramUserId);
 
@@ -265,7 +277,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                             }
 
                             case 2 -> {
-                                //delete addButtonStep
+                                //delete step
                                 addButtonSteps.remove(telegramUserId);
 
                                 //create a new button
@@ -284,75 +296,403 @@ public class TelegramBot extends TelegramLongPollingBot {
                         return;
                     }
 
-                    // handle admin panel message
-                    InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
 
-                    InlineKeyboardButton addAdminButton = InlineKeyboardButton.builder()
-                            .callbackData(AdminCallback.ADD_ADMIN_CALLBACK)
-                            .text("➕ Add admin")
-                            .build();
+                    switch (text) {
+                        case "/start", "/admin" -> {
+                            // handle admin panel message
+                            InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
 
-                    InlineKeyboardButton deleteAdminButton = InlineKeyboardButton.builder()
-                            .callbackData(AdminCallback.DELETE_ADMIN_CALLBACK)
-                            .text("➖ Delete admin")
-                            .build();
+                            InlineKeyboardButton addButtonButton = InlineKeyboardButton.builder()
+                                    .callbackData(AdminCallback.ADD_BUTTON_CALLBACK)
+                                    .text("➕ Add button")
+                                    .build();
 
-                    InlineKeyboardButton addGroupButton = InlineKeyboardButton.builder()
-                            .callbackData(AdminCallback.ADD_GROUP_CALLBACK)
-                            .text("➕ Add group")
-                            .build();
+                            InlineKeyboardButton deleteButtonButton = InlineKeyboardButton.builder()
+                                    .callbackData(AdminCallback.DELETE_BUTTON_CALLBACK)
+                                    .text("➖ Delete button")
+                                    .build();
 
-                    InlineKeyboardButton deleteGroupButton = InlineKeyboardButton.builder()
-                            .callbackData(AdminCallback.DELETE_GROUP_CALLBACK)
-                            .text("➖ Delete group")
-                            .build();
+                            List<InlineKeyboardButton> keyboardButtonsRow3 = new ArrayList<>();
 
-                    InlineKeyboardButton writeAnnouncementButton = InlineKeyboardButton.builder()
-                            .callbackData(AdminCallback.WRITE_ANNOUNCEMENT_CALLBACK)
-                            .text("\uD83D\uDCE3 Write announcement")
-                            .build();
+                            keyboardButtonsRow3.add(addButtonButton);
+                            keyboardButtonsRow3.add(deleteButtonButton);
 
-                    InlineKeyboardButton addButtonButton = InlineKeyboardButton.builder()
-                            .callbackData(AdminCallback.ADD_BUTTON_CALLBACK)
-                            .text("➕ Add button")
-                            .build();
+                            List<List<InlineKeyboardButton>> rowList = new ArrayList<>();
 
-                    InlineKeyboardButton deleteButtonButton = InlineKeyboardButton.builder()
-                            .callbackData(AdminCallback.DELETE_BUTTON_CALLBACK)
-                            .text("➖ Delete button")
-                            .build();
+                            if (telegramUserId == telegramBotProperty.getAdmin()) {
+                                List<InlineKeyboardButton> keyboardButtonsRow1 = new ArrayList<>();
+                                List<InlineKeyboardButton> keyboardButtonsRow2 = new ArrayList<>();
 
-                    List<InlineKeyboardButton> keyboardButtonsRow1 = new ArrayList<>();
-                    List<InlineKeyboardButton> keyboardButtonsRow2 = new ArrayList<>();
-                    List<InlineKeyboardButton> keyboardButtonsRow3 = new ArrayList<>();
-                    List<InlineKeyboardButton> keyboardButtonsRow4 = new ArrayList<>();
+                                InlineKeyboardButton addAdminButton = InlineKeyboardButton.builder()
+                                        .callbackData(AdminCallback.ADD_ADMIN_CALLBACK)
+                                        .text("➕ Add admin")
+                                        .build();
 
-                    keyboardButtonsRow1.add(addAdminButton);
-                    keyboardButtonsRow1.add(deleteAdminButton);
+                                InlineKeyboardButton deleteAdminButton = InlineKeyboardButton.builder()
+                                        .callbackData(AdminCallback.DELETE_ADMIN_CALLBACK)
+                                        .text("➖ Delete admin")
+                                        .build();
 
-                    keyboardButtonsRow2.add(addGroupButton);
-                    keyboardButtonsRow2.add(deleteGroupButton);
+                                InlineKeyboardButton addGroupButton = InlineKeyboardButton.builder()
+                                        .callbackData(AdminCallback.ADD_GROUP_CALLBACK)
+                                        .text("➕ Add group")
+                                        .build();
 
-                    keyboardButtonsRow3.add(writeAnnouncementButton);
+                                InlineKeyboardButton deleteGroupButton = InlineKeyboardButton.builder()
+                                        .callbackData(AdminCallback.DELETE_GROUP_CALLBACK)
+                                        .text("➖ Delete group")
+                                        .build();
 
-                    keyboardButtonsRow4.add(addButtonButton);
-                    keyboardButtonsRow4.add(deleteButtonButton);
+                                keyboardButtonsRow1.add(addAdminButton);
+                                keyboardButtonsRow1.add(deleteAdminButton);
 
-                    List<List<InlineKeyboardButton>> rowList = new ArrayList<>();
+                                keyboardButtonsRow2.add(addGroupButton);
+                                keyboardButtonsRow2.add(deleteGroupButton);
 
-                    rowList.add(keyboardButtonsRow1);
-                    rowList.add(keyboardButtonsRow2);
-                    rowList.add(keyboardButtonsRow3);
-                    rowList.add(keyboardButtonsRow4);
+                                rowList.add(keyboardButtonsRow1);
+                                rowList.add(keyboardButtonsRow2);
+                            }
 
-                    inlineKeyboardMarkup.setKeyboard(rowList);
+                            rowList.add(keyboardButtonsRow3);
+
+                            inlineKeyboardMarkup.setKeyboard(rowList);
+
+                            handleSendMessage(SendMessage.builder()
+                                    .chatId(chatId)
+                                    .text("\uD83D\uDCDB <b>Admin panel</b>")
+                                    .parseMode("html")
+                                    .replyMarkup(inlineKeyboardMarkup)
+                                    .build());
+                            return;
+                        }
+                    }
+
+                    // other reaction
+
+                    // delete current message
+                    handleDeleteMessage(DeleteMessage.builder().chatId(chatId).messageId(messageId).build());
+
+                    //delete step
+                    writeAnnouncementSteps.remove(telegramUserId);
 
                     handleSendMessage(SendMessage.builder()
                             .chatId(chatId)
-                            .text("\uD83D\uDCDB <b>Admin panel</b>")
+                            .text("✅ <b>Write announcement</b>\n\n"
+                                    + "You have successfully forwarded your message to the groups linked to the bot")
                             .parseMode("html")
-                            .replyMarkup(inlineKeyboardMarkup)
                             .build());
+
+                    //get all groups
+                    Collection<Group> allLinkedGroups = groupService.getAll();
+
+                    Collection<Button> allButtons = buttonService.getAll();
+
+                    InlineKeyboardMarkup newInlineKeyboardMarkup = new InlineKeyboardMarkup();
+
+                    List<List<InlineKeyboardButton>> rowList = new ArrayList<>();
+
+                    for (Button button : allButtons) {
+                        List<InlineKeyboardButton> newKeyboardButtonsRow = new ArrayList<>();
+
+                        InlineKeyboardButton newButton = InlineKeyboardButton.builder()
+                                .text(button.getText())
+                                .url(button.getLink())
+                                .build();
+
+                        newKeyboardButtonsRow.add(newButton);
+
+                        rowList.add(newKeyboardButtonsRow);
+                    }
+
+                    newInlineKeyboardMarkup.setKeyboard(rowList);
+
+                    for (Group linkedGroup : allLinkedGroups) {
+                        handleSendMessage(SendMessage.builder()
+                                .chatId(linkedGroup.getTelegramChatId())
+                                .text(text)
+                                .replyMarkup(newInlineKeyboardMarkup)
+                                .parseMode("html")
+                                .build());
+                    }
+
+                } else if (update.getMessage().hasPhoto()) {
+                    PhotoSize photo = update.getMessage().getPhoto().get(update.getMessage().getPhoto().size() - 1);
+                    String caption = update.getMessage().getCaption();
+
+                    //back to admin inlineKeyboardMarkup
+                    InlineKeyboardMarkup backToAdminKeyboardMarkup = new InlineKeyboardMarkup();
+
+                    InlineKeyboardButton backToAdmin = InlineKeyboardButton.builder()
+                            .callbackData(AdminCallback.BACK_TO_ADMIN_CALLBACK)
+                            .text("↩\uFE0F Back")
+                            .build();
+
+                    List<InlineKeyboardButton> backToAdminKeyboardRows = new ArrayList<>();
+
+                    backToAdminKeyboardRows.add(backToAdmin);
+
+                    List<List<InlineKeyboardButton>> backToAdminRowList = new ArrayList<>();
+
+                    backToAdminRowList.add(backToAdminKeyboardRows);
+
+                    backToAdminKeyboardMarkup.setKeyboard(backToAdminRowList);
+
+                    //write announcement step
+
+                    // delete current message
+                    handleDeleteMessage(DeleteMessage.builder().chatId(chatId).messageId(messageId).build());
+
+                    //delete step
+                    writeAnnouncementSteps.remove(telegramUserId);
+
+                    handleSendMessage(SendMessage.builder()
+                            .chatId(chatId)
+                            .text("✅ <b>Write announcement</b>\n\n"
+                                    + "You have successfully forwarded your message to the groups linked to the bot")
+                            .parseMode("html")
+                            .build());
+
+                    File mediaFile = null;
+
+                    //---- download media file
+
+                    try {
+                        String URLWithMediaFile = execute(GetFile.builder().fileId(photo.getFileId()).build()).getFileUrl(telegramBotProperty.getToken());
+
+                        mediaFile = urlFileDownloaderUtil.downloadFileAndPackInTemp(URLWithMediaFile, "photo" + UUID.randomUUID(), ".png");
+
+                    } catch (TelegramApiException | IOException e) {
+                        log.warn(e.getMessage());
+                    }
+                    //---
+
+                    //get all groups
+                    Collection<Group> allLinkedGroups = groupService.getAll();
+
+                    Collection<Button> allButtons = buttonService.getAll();
+
+                    InlineKeyboardMarkup newInlineKeyboardMarkup = new InlineKeyboardMarkup();
+
+                    List<List<InlineKeyboardButton>> rowList = new ArrayList<>();
+
+                    for (Button button : allButtons) {
+                        List<InlineKeyboardButton> newKeyboardButtonsRow = new ArrayList<>();
+
+                        InlineKeyboardButton newButton = InlineKeyboardButton.builder()
+                                .text(button.getText())
+                                .url(button.getLink())
+                                .build();
+
+                        newKeyboardButtonsRow.add(newButton);
+
+                        rowList.add(newKeyboardButtonsRow);
+                    }
+
+                    newInlineKeyboardMarkup.setKeyboard(rowList);
+
+                    InputFile inputMediaFile = new InputFile(mediaFile);
+
+                    if (caption == null) {
+                        caption = "";
+                    }
+
+                    for (Group linkedGroup : allLinkedGroups) {
+                        handleSendPhoto(SendPhoto.builder()
+                                .chatId(linkedGroup.getTelegramChatId())
+                                .caption(caption)
+                                .photo(inputMediaFile)
+                                .parseMode("html")
+                                .replyMarkup(newInlineKeyboardMarkup)
+                                .build());
+                    }
+
+                    // resource release
+                    mediaFile.delete();
+                } else if (update.getMessage().hasAnimation()) {
+                    Animation animation = update.getMessage().getAnimation();
+                    String caption = update.getMessage().getCaption();
+
+                    //back to admin inlineKeyboardMarkup
+                    InlineKeyboardMarkup backToAdminKeyboardMarkup = new InlineKeyboardMarkup();
+
+                    InlineKeyboardButton backToAdmin = InlineKeyboardButton.builder()
+                            .callbackData(AdminCallback.BACK_TO_ADMIN_CALLBACK)
+                            .text("↩\uFE0F Back")
+                            .build();
+
+                    List<InlineKeyboardButton> backToAdminKeyboardRows = new ArrayList<>();
+
+                    backToAdminKeyboardRows.add(backToAdmin);
+
+                    List<List<InlineKeyboardButton>> backToAdminRowList = new ArrayList<>();
+
+                    backToAdminRowList.add(backToAdminKeyboardRows);
+
+                    backToAdminKeyboardMarkup.setKeyboard(backToAdminRowList);
+
+                    //write announcement step
+
+                    // delete current message
+                    handleDeleteMessage(DeleteMessage.builder().chatId(chatId).messageId(messageId).build());
+
+                    //delete step
+                    writeAnnouncementSteps.remove(telegramUserId);
+
+                    handleSendMessage(SendMessage.builder()
+                            .chatId(chatId)
+                            .text("✅ <b>Write announcement</b>\n\n"
+                                    + "You have successfully forwarded your message to the groups linked to the bot")
+                            .parseMode("html")
+                            .build());
+
+                    File mediaFile = null;
+
+                    //---- download media file
+
+                    try {
+                        String URLWithMediaFile = execute(GetFile.builder().fileId(animation.getFileId()).build()).getFileUrl(telegramBotProperty.getToken());
+
+                        mediaFile = urlFileDownloaderUtil.downloadFileAndPackInTemp(URLWithMediaFile, "gif" + UUID.randomUUID(), ".gif");
+
+                    } catch (TelegramApiException | IOException e) {
+                        log.warn(e.getMessage());
+                    }
+                    //---
+
+                    //get all groups
+                    Collection<Group> allLinkedGroups = groupService.getAll();
+
+                    Collection<Button> allButtons = buttonService.getAll();
+
+                    InlineKeyboardMarkup newInlineKeyboardMarkup = new InlineKeyboardMarkup();
+
+                    List<List<InlineKeyboardButton>> rowList = new ArrayList<>();
+
+                    for (Button button : allButtons) {
+                        List<InlineKeyboardButton> newKeyboardButtonsRow = new ArrayList<>();
+
+                        InlineKeyboardButton newButton = InlineKeyboardButton.builder()
+                                .text(button.getText())
+                                .url(button.getLink())
+                                .build();
+
+                        newKeyboardButtonsRow.add(newButton);
+
+                        rowList.add(newKeyboardButtonsRow);
+                    }
+
+                    newInlineKeyboardMarkup.setKeyboard(rowList);
+
+                    InputFile inputMediaFile = new InputFile(mediaFile);
+
+                    if (caption == null) {
+                        caption = "";
+                    }
+
+                    for (Group linkedGroup : allLinkedGroups) {
+                        handleSendAnimation(SendAnimation.builder()
+                                .chatId(linkedGroup.getTelegramChatId())
+                                .caption(caption)
+                                .animation(inputMediaFile)
+                                .parseMode("html")
+                                .replyMarkup(newInlineKeyboardMarkup)
+                                .build());
+                    }
+
+                    // resource release
+                    mediaFile.delete();
+                } else if (update.getMessage().hasVideo()) {
+                    Video video = update.getMessage().getVideo();
+                    String caption = update.getMessage().getCaption();
+
+                    //back to admin inlineKeyboardMarkup
+                    InlineKeyboardMarkup backToAdminKeyboardMarkup = new InlineKeyboardMarkup();
+
+                    InlineKeyboardButton backToAdmin = InlineKeyboardButton.builder()
+                            .callbackData(AdminCallback.BACK_TO_ADMIN_CALLBACK)
+                            .text("↩\uFE0F Back")
+                            .build();
+
+                    List<InlineKeyboardButton> backToAdminKeyboardRows = new ArrayList<>();
+
+                    backToAdminKeyboardRows.add(backToAdmin);
+
+                    List<List<InlineKeyboardButton>> backToAdminRowList = new ArrayList<>();
+
+                    backToAdminRowList.add(backToAdminKeyboardRows);
+
+                    backToAdminKeyboardMarkup.setKeyboard(backToAdminRowList);
+
+                    //write announcement step
+                    // delete current message
+                    handleDeleteMessage(DeleteMessage.builder().chatId(chatId).messageId(messageId).build());
+
+                    //delete step
+                    writeAnnouncementSteps.remove(telegramUserId);
+
+                    handleSendMessage(SendMessage.builder()
+                            .chatId(chatId)
+                            .text("✅ <b>Write announcement</b>\n\n"
+                                    + "You have successfully forwarded your message to the groups linked to the bot")
+                            .parseMode("html")
+                            .build());
+
+                    File mediaFile = null;
+
+                    //---- download media file
+
+                    try {
+                        String URLWithMediaFile = execute(GetFile.builder().fileId(video.getFileId()).build()).getFileUrl(telegramBotProperty.getToken());
+
+                        mediaFile = urlFileDownloaderUtil.downloadFileAndPackInTemp(URLWithMediaFile, "video" + UUID.randomUUID(), ".mp4");
+
+                    } catch (TelegramApiException | IOException e) {
+                        log.warn(e.getMessage());
+                    }
+                    //---
+
+                    //get all groups
+                    Collection<Group> allLinkedGroups = groupService.getAll();
+
+                    Collection<Button> allButtons = buttonService.getAll();
+
+                    InlineKeyboardMarkup newInlineKeyboardMarkup = new InlineKeyboardMarkup();
+
+                    List<List<InlineKeyboardButton>> rowList = new ArrayList<>();
+
+                    for (Button button : allButtons) {
+                        List<InlineKeyboardButton> newKeyboardButtonsRow = new ArrayList<>();
+
+                        InlineKeyboardButton newButton = InlineKeyboardButton.builder()
+                                .text(button.getText())
+                                .url(button.getLink())
+                                .build();
+
+                        newKeyboardButtonsRow.add(newButton);
+
+                        rowList.add(newKeyboardButtonsRow);
+                    }
+
+                    newInlineKeyboardMarkup.setKeyboard(rowList);
+
+                    InputFile inputMediaFile = new InputFile(mediaFile);
+
+                    if (caption == null) {
+                        caption = "";
+                    }
+
+                    for (Group linkedGroup : allLinkedGroups) {
+                        handleSendVideo(SendVideo.builder()
+                                .chatId(linkedGroup.getTelegramChatId())
+                                .caption(caption)
+                                .video(inputMediaFile)
+                                .parseMode("html")
+                                .replyMarkup(newInlineKeyboardMarkup)
+                                .build());
+                    }
+
+                    // resource release
+                    mediaFile.delete();
                 }
             } else if (update.hasCallbackQuery()) {
                 String callbackQueryData = update.getCallbackQuery().getData();
@@ -455,8 +795,19 @@ public class TelegramBot extends TelegramLongPollingBot {
                                 .build());
                     }
 
-                    case AdminCallback.DELETE_BUTTON_CALLBACK -> {
-                        handleDeleteButtonMenu(chatId, messageId);
+                    case AdminCallback.DELETE_BUTTON_CALLBACK -> handleDeleteButtonMenu(chatId, messageId);
+
+                    case AdminCallback.WRITE_ANNOUNCEMENT_CALLBACK -> {
+                        writeAnnouncementSteps.put(telegramUserId, messageId);
+
+                        handleEditMessageText(EditMessageText.builder()
+                                .chatId(chatId)
+                                .messageId(messageId)
+                                .text("\uD83D\uDCE3 <b>Write announcement</b>\n\n"
+                                + "Send a message that will be forwarded to all groups attached to the bot")
+                                .replyMarkup(backToAdminKeyboardMarkup)
+                                .parseMode("html")
+                                .build());
                     }
 
                     //handle back to admin
@@ -466,34 +817,10 @@ public class TelegramBot extends TelegramLongPollingBot {
                         addGroupSteps.remove(telegramUserId);
                         deleteGroupSteps.remove(telegramUserId);
                         addButtonSteps.remove(telegramUserId);
+                        writeAnnouncementSteps.remove(telegramUserId);
 
                         // handle admin panel message
                         InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
-
-                        InlineKeyboardButton addAdminButton = InlineKeyboardButton.builder()
-                                .callbackData(AdminCallback.ADD_ADMIN_CALLBACK)
-                                .text("➕ Add admin")
-                                .build();
-
-                        InlineKeyboardButton deleteAdminButton = InlineKeyboardButton.builder()
-                                .callbackData(AdminCallback.DELETE_ADMIN_CALLBACK)
-                                .text("➖ Delete admin")
-                                .build();
-
-                        InlineKeyboardButton addGroupButton = InlineKeyboardButton.builder()
-                                .callbackData(AdminCallback.ADD_GROUP_CALLBACK)
-                                .text("➕ Add group")
-                                .build();
-
-                        InlineKeyboardButton deleteGroupButton = InlineKeyboardButton.builder()
-                                .callbackData(AdminCallback.DELETE_GROUP_CALLBACK)
-                                .text("➖ Delete group")
-                                .build();
-
-                        InlineKeyboardButton writeAnnouncementButton = InlineKeyboardButton.builder()
-                                .callbackData(AdminCallback.WRITE_ANNOUNCEMENT_CALLBACK)
-                                .text("\uD83D\uDCE3 Write announcement")
-                                .build();
 
                         InlineKeyboardButton addButtonButton = InlineKeyboardButton.builder()
                                 .callbackData(AdminCallback.ADD_BUTTON_CALLBACK)
@@ -505,28 +832,48 @@ public class TelegramBot extends TelegramLongPollingBot {
                                 .text("➖ Delete button")
                                 .build();
 
-                        List<InlineKeyboardButton> keyboardButtonsRow1 = new ArrayList<>();
-                        List<InlineKeyboardButton> keyboardButtonsRow2 = new ArrayList<>();
                         List<InlineKeyboardButton> keyboardButtonsRow3 = new ArrayList<>();
-                        List<InlineKeyboardButton> keyboardButtonsRow4 = new ArrayList<>();
 
-                        keyboardButtonsRow1.add(addAdminButton);
-                        keyboardButtonsRow1.add(deleteAdminButton);
-
-                        keyboardButtonsRow2.add(addGroupButton);
-                        keyboardButtonsRow2.add(deleteGroupButton);
-
-                        keyboardButtonsRow3.add(writeAnnouncementButton);
-
-                        keyboardButtonsRow4.add(addButtonButton);
-                        keyboardButtonsRow4.add(deleteButtonButton);
+                        keyboardButtonsRow3.add(addButtonButton);
+                        keyboardButtonsRow3.add(deleteButtonButton);
 
                         List<List<InlineKeyboardButton>> rowList = new ArrayList<>();
 
-                        rowList.add(keyboardButtonsRow1);
-                        rowList.add(keyboardButtonsRow2);
+                        if (telegramUserId == telegramBotProperty.getAdmin()) {
+                            List<InlineKeyboardButton> keyboardButtonsRow1 = new ArrayList<>();
+                            List<InlineKeyboardButton> keyboardButtonsRow2 = new ArrayList<>();
+
+                            InlineKeyboardButton addAdminButton = InlineKeyboardButton.builder()
+                                    .callbackData(AdminCallback.ADD_ADMIN_CALLBACK)
+                                    .text("➕ Add admin")
+                                    .build();
+
+                            InlineKeyboardButton deleteAdminButton = InlineKeyboardButton.builder()
+                                    .callbackData(AdminCallback.DELETE_ADMIN_CALLBACK)
+                                    .text("➖ Delete admin")
+                                    .build();
+
+                            InlineKeyboardButton addGroupButton = InlineKeyboardButton.builder()
+                                    .callbackData(AdminCallback.ADD_GROUP_CALLBACK)
+                                    .text("➕ Add group")
+                                    .build();
+
+                            InlineKeyboardButton deleteGroupButton = InlineKeyboardButton.builder()
+                                    .callbackData(AdminCallback.DELETE_GROUP_CALLBACK)
+                                    .text("➖ Delete group")
+                                    .build();
+
+                            keyboardButtonsRow1.add(addAdminButton);
+                            keyboardButtonsRow1.add(deleteAdminButton);
+
+                            keyboardButtonsRow2.add(addGroupButton);
+                            keyboardButtonsRow2.add(deleteGroupButton);
+
+                            rowList.add(keyboardButtonsRow1);
+                            rowList.add(keyboardButtonsRow2);
+                        }
+
                         rowList.add(keyboardButtonsRow3);
-                        rowList.add(keyboardButtonsRow4);
 
                         inlineKeyboardMarkup.setKeyboard(rowList);
 
@@ -551,8 +898,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                             .build());
 
                     handleDeleteButtonMenu(chatId, messageId);
-
-                    return;
                 }
             }
         }).start();
@@ -602,6 +947,33 @@ public class TelegramBot extends TelegramLongPollingBot {
     private Message handleSendMessage(SendMessage sendMessage) {
         try {
             return execute(sendMessage);
+        } catch (TelegramApiException e) {
+            log.error(e.getMessage());
+            return null;
+        }
+    }
+
+    private Message handleSendPhoto(SendPhoto sendPhoto) {
+        try {
+            return execute(sendPhoto);
+        } catch (TelegramApiException e) {
+            log.error(e.getMessage());
+            return null;
+        }
+    }
+
+    private Message handleSendAnimation(SendAnimation sendAnimation) {
+        try {
+            return execute(sendAnimation);
+        } catch (TelegramApiException e) {
+            log.error(e.getMessage());
+            return null;
+        }
+    }
+
+    private Message handleSendVideo(SendVideo sendVideo) {
+        try {
+            return execute(sendVideo);
         } catch (TelegramApiException e) {
             log.error(e.getMessage());
             return null;

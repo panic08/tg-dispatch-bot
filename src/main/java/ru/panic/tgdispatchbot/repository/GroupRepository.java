@@ -7,12 +7,16 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import ru.panic.tgdispatchbot.model.Group;
 
+import java.util.Collection;
 import java.util.Optional;
 
 @Repository
 public interface GroupRepository extends CrudRepository<Group, Long> {
     @Query("SELECT g.* FROM groups_table g WHERE g.telegram_chat_id = :telegramChatId")
     Optional<Group> findByTelegramChatId(@Param("telegramChatId") long telegramChatId);
+
+    @Query("SELECT g.* FROM groups_table g")
+    Collection<Group> findAll();
 
     @Query("DELETE FROM groups_table WHERE telegram_chat_id = :telegramChatId")
     @Modifying

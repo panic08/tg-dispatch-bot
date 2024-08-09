@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.panic.tgdispatchbot.model.Group;
 import ru.panic.tgdispatchbot.repository.GroupRepository;
 
+import java.util.Collection;
 import java.util.Optional;
 
 @Service
@@ -21,6 +22,10 @@ public class GroupService {
 
     public Optional<Group> getByTelegramChatId(long telegramChatId) {
         return groupRepository.findByTelegramChatId(telegramChatId);
+    }
+
+    public Collection<Group> getAll() {
+        return groupRepository.findAll();
     }
 
     @Transactional

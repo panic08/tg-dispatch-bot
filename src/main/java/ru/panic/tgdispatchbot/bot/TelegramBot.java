@@ -319,7 +319,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
                             List<List<InlineKeyboardButton>> rowList = new ArrayList<>();
 
-                            if (telegramUserId == telegramBotProperty.getAdmin()) {
+                            if (telegramBotProperty.getFullAdmins().contains(telegramUserId)) {
                                 List<InlineKeyboardButton> keyboardButtonsRow1 = new ArrayList<>();
                                 List<InlineKeyboardButton> keyboardButtonsRow2 = new ArrayList<>();
 
@@ -839,7 +839,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
                         List<List<InlineKeyboardButton>> rowList = new ArrayList<>();
 
-                        if (telegramUserId == telegramBotProperty.getAdmin()) {
+                        if (telegramBotProperty.getFullAdmins().contains(telegramUserId)) {
                             List<InlineKeyboardButton> keyboardButtonsRow1 = new ArrayList<>();
                             List<InlineKeyboardButton> keyboardButtonsRow2 = new ArrayList<>();
 

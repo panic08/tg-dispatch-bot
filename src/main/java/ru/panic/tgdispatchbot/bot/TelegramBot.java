@@ -409,7 +409,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     for (Group linkedGroup : allLinkedGroups) {
                         handleSendMessage(SendMessage.builder()
                                 .chatId(linkedGroup.getTelegramChatId())
-                                .text(text)
+                                .text("<b>" + text + "</b>")
                                 .replyMarkup(newInlineKeyboardMarkup)
                                 .parseMode("html")
                                 .build());
@@ -418,6 +418,8 @@ public class TelegramBot extends TelegramLongPollingBot {
                 } else if (update.getMessage().hasPhoto()) {
                     PhotoSize photo = update.getMessage().getPhoto().get(update.getMessage().getPhoto().size() - 1);
                     String caption = update.getMessage().getCaption();
+
+                    System.out.println(update.getMessage().getPhoto().size());
 
                     //back to admin inlineKeyboardMarkup
                     InlineKeyboardMarkup backToAdminKeyboardMarkup = new InlineKeyboardMarkup();
@@ -499,7 +501,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     for (Group linkedGroup : allLinkedGroups) {
                         handleSendPhoto(SendPhoto.builder()
                                 .chatId(linkedGroup.getTelegramChatId())
-                                .caption(caption)
+                                .caption("<b>" + caption + "</b>")
                                 .photo(inputMediaFile)
                                 .parseMode("html")
                                 .replyMarkup(newInlineKeyboardMarkup)
@@ -592,7 +594,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     for (Group linkedGroup : allLinkedGroups) {
                         handleSendAnimation(SendAnimation.builder()
                                 .chatId(linkedGroup.getTelegramChatId())
-                                .caption(caption)
+                                .caption("<b>" + caption + "</b>")
                                 .animation(inputMediaFile)
                                 .parseMode("html")
                                 .replyMarkup(newInlineKeyboardMarkup)
@@ -684,7 +686,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     for (Group linkedGroup : allLinkedGroups) {
                         handleSendVideo(SendVideo.builder()
                                 .chatId(linkedGroup.getTelegramChatId())
-                                .caption(caption)
+                                .caption("<b>" + caption + "</b>")
                                 .video(inputMediaFile)
                                 .parseMode("html")
                                 .replyMarkup(newInlineKeyboardMarkup)

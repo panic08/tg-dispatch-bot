@@ -419,8 +419,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                     PhotoSize photo = update.getMessage().getPhoto().get(update.getMessage().getPhoto().size() - 1);
                     String caption = update.getMessage().getCaption();
 
-                    System.out.println(update.getMessage().getPhoto().size());
-
                     //back to admin inlineKeyboardMarkup
                     InlineKeyboardMarkup backToAdminKeyboardMarkup = new InlineKeyboardMarkup();
 
